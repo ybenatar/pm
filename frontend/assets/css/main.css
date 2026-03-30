@@ -1,0 +1,75 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ── Design tokens ─────────────────────────────────────────────────────── */
+:root {
+  --yellow:  #ecad0a;
+  --blue:    #209dd7;
+  --purple:  #753991;
+  --navy:    #032147;
+  --gray:    #888888;
+
+  --bg:        #0d1b2e;
+  --surface:   #112240;
+  --surface-2: #1a3157;
+  --border:    rgba(255, 255, 255, 0.08);
+  --text:      #e6edf4;
+  --text-muted:#a8b4c4;
+
+  --radius:    10px;
+  --radius-sm: 6px;
+  --shadow:    0 4px 20px rgba(0, 0, 0, 0.35);
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
+
+  --transition: 150ms ease;
+}
+
+/* ── Reset ─────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Base ──────────────────────────────────────────────────────────────── */
+html, body {
+  height: 100%;
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── App shell ─────────────────────────────────────────────────────────── */
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Scrollbars ────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 99px; }
+
+/* ── Buttons ───────────────────────────────────────────────────────────── */
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+  transition: opacity var(--transition), transform var(--transition), background var(--transition);
+}
+button:active { transform: scale(0.97); }
+
+/* ── Inputs ────────────────────────────────────────────────────────────── */
+input, textarea {
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  outline: none;
+  transition: border-color var(--transition);
+  width: 100%;
+  resize: none;
+}
+input:focus, textarea:focus {
+  border-color: var(--blue);
+}

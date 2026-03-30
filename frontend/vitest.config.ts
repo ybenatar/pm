@@ -1,22 +1,17 @@
-import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react";
-import path from "node:path";
+import { defineConfig } from 'vitest/config'
+import vue from '@vitejs/plugin-vue'
+import { resolve } from 'path'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [vue()],
   test: {
-    environment: "jsdom",
-    setupFiles: ["./src/test/setup.ts"],
+    environment: 'happy-dom',
     globals: true,
-    coverage: {
-      reporter: ["text", "html"],
-    },
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
-    exclude: ["node_modules", "tests"],
   },
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '~': resolve(__dirname, '.'),
+      '@': resolve(__dirname, '.'),
     },
   },
-});
+})
