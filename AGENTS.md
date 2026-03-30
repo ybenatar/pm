@@ -19,8 +19,8 @@ For the MVP, this will run locally (in a docker container)
 
 ## Technical Decisions
 
-- NextJS frontend
-- Python FastAPI backend, including serving the static NextJS site at /
+- NuxtJS frontend
+- Python FastAPI backend, including serving the static NuxtJS site at /
 - Everything packaged into a Docker container
 - Use "uv" as the package manager for python in the Docker container
 - Use OpenRouter for the AI calls. An OPENROUTER_API_KEY is in .env in the project root
