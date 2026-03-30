@@ -1,0 +1,6 @@
+@echo off
+echo Stopping pm_container...
+docker stop pm_container
+echo Removing pm_container...
+docker rm pm_container
+echo Done!
