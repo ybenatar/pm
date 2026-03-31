@@ -57,3 +57,16 @@ class BoardRead(SQLModel):
     id: str
     owner_id: str
     columns: List[ColumnRead] = []
+
+# --- AI CHAT MODELS ---
+class KanbanAction(SQLModel):
+    action: str  # "create", "move", "delete"
+    card_id: Optional[str] = None
+    column_id: Optional[str] = None
+    title: Optional[str] = None
+    details: Optional[str] = None
+    order: Optional[int] = 0
+
+class AIChatResponse(SQLModel):
+    text: str
+    actions: List[KanbanAction]

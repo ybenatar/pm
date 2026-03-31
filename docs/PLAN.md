@@ -57,17 +57,18 @@
 - **Tests/Success Criteria**: End-to-end verification. Newly created cards and moved cards persist after browser refresh (F5) and full Docker container restart.
 
 ## Part 8: AI Connectivity Scaffolding
-- [ ] Add the `openai` Python SDK via `uv` to the backend.
-- [ ] Create `backend/ai.py` logic configured to instantiate the client using the mapped `OPENROUTER_API_KEY` environment variable.
-- [ ] Set model hardcoding explicitly to `openai/gpt-oss-120b`.
-- [ ] Create a trivial testing endpoint `/api/ai/test` taking a sample "2+2" prompt.
-- **Tests/Success Criteria**: Ensure the API key is passed through Docker. Making a GET request to `http://localhost:8000/api/ai/test` should return "4" reliably from OpenRouter.
+- [x] Add the `openai` Python SDK via `uv add openai` to the backend.
+- [x] Create `backend/ai.py` with `get_client()` function (base URL: `https://openrouter.ai/api/v1`) and `MODEL` constant hardcoded to `openai/gpt-oss-120b`.
+- [x] Add `--env-file .env` flag to `docker run` in `scripts/start.bat` and `scripts/start.sh` to inject `OPENROUTER_API_KEY` into the container.
+- [x] Create `GET /api/ai/test` endpoint in `main.py` that makes a real chat completion call to the model with the prompt "What is 2+2? Reply with just the number."
+- **Test flow**: `.\scripts\start.bat` → `Invoke-RestMethod http://localhost:8000/api/ai/test` returned `{ "model": "openai/gpt-oss-120b", "answer": "4" }`.
+- **Tests/Success Criteria**: Confirmed live model call returns correct answer. API key flows correctly through Docker env-file injection.
 
 ## Part 9: AI Kanban Context & Structured Outputs
-- [ ] Define rigorous Pydantic schemas mirroring the database layout for OpenRouter to enforce Structured Outputs for JSON completion.
-- [ ] Create the primary chatting endpoint `/api/ai/chat` which accepts the user message input string.
-- [ ] Implement query logic: the backend pulls the `Kanban Board` state directly from the DB, serializes it, and inserts it into a rigid global System Prompt mapping out the agent's constraints.
-- [ ] Backend makes the completion request, unpacks the structured output JSON into Python objects, commits necessary model updates to SQLite, and returns both the text response + refreshed board state to the frontend.
+- [x] Define rigorous Pydantic schemas mirroring the database layout for OpenRouter to enforce Structured Outputs for JSON completion.
+- [x] Create the primary chatting endpoint `/api/ai/chat` which accepts the user message input string.
+- [x] Implement query logic: the backend pulls the `Kanban Board` state directly from the DB, serializes it, and inserts it into a rigid global System Prompt mapping out the agent's constraints.
+- [x] Backend makes the completion request, unpacks the structured output JSON into Python objects, commits necessary model updates to SQLite, and returns both the text response + refreshed board state to the frontend.
 - **Tests/Success Criteria**: Programmatically POST to `/api/ai/chat` requesting "Add a card for buying groceries to the Todo column". Expect the API to return the AI's confirmation text AND the structured DB representation indicating the new card exists. Check the actual SQLite DB to verify.
 
 ## Part 10: Beautiful Sidebar Widget Integration

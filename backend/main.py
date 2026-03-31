@@ -8,7 +8,19 @@ from sqlmodel import Session
 from pydantic import BaseModel
 
 from database import init_db, get_session
-import crud, models
+import crud, models, ai
+import json
+import logging
+
+# Set up error logging for AI hallucinations
+error_logger = logging.getLogger("ai_errors")
+error_logger.setLevel(logging.ERROR)
+fh = logging.FileHandler("error.log")
+fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+error_logger.addHandler(fh)
+
+# In-memory history (Server-side)
+CHAT_HISTORY = [] # List of {"role": "user/assistant", "content": "..."}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -37,6 +49,9 @@ class MoveCardRequest(BaseModel):
 class RenameColumnRequest(BaseModel):
     name: str
 
+class AIChatRequest(BaseModel):
+    message: str
+
 # --- REST ENDPOINTS ---
 @app.get("/api/hello")
 def read_hello():
@@ -45,6 +60,16 @@ def read_hello():
 @app.get("/api/health")
 def read_health():
     return {"status": "ok"}
+
+@app.get("/api/ai/test")
+def test_ai():
+    client = ai.get_client()
+    response = client.chat.completions.create(
+        model=ai.MODEL,
+        messages=[{"role": "user", "content": "What is 2+2? Reply with just the number."}],
+    )
+    answer = response.choices[0].message.content
+    return {"model": ai.MODEL, "answer": answer}
 
 @app.get("/api/board", response_model=models.BoardRead)
 def get_board(session: Session = Depends(get_session)):
@@ -77,6 +102,85 @@ def delete_card(card_id: str, session: Session = Depends(get_session)):
     if not success:
         raise HTTPException(status_code=404, detail="Card not found")
     return {"status": "deleted"}
+
+@app.post("/api/ai/chat")
+async def ai_chat(req: AIChatRequest, session: Session = Depends(get_session)):
+    global CHAT_HISTORY
+    
+    # 1. Get current board state
+    board = crud.get_board_for_user(session, "user")
+    if not board:
+        raise HTTPException(status_code=404, detail="No board found for AI context")
+    
+    # 2. Build system prompt
+    system_prompt = ai.get_system_prompt(board)
+    
+    # 3. Manage History
+    limit = ai.get_history_limit()
+    if len(CHAT_HISTORY) > limit * 2: # roles: user + assistant
+        CHAT_HISTORY = CHAT_HISTORY[-(limit * 2):]
+        
+    messages = [{"role": "system", "content": system_prompt}] + CHAT_HISTORY + [{"role": "user", "content": req.message}]
+    
+    # 4. Call AI
+    try:
+        client = ai.get_client()
+        response = client.chat.completions.create(
+            model=ai.MODEL,
+            messages=messages,
+            response_format={ "type": "json_object" }
+        )
+        raw_content = response.choices[0].message.content
+        ai_data = json.loads(raw_content)
+        
+        # Add to history
+        CHAT_HISTORY.append({"role": "user", "content": req.message})
+        CHAT_HISTORY.append({"role": "assistant", "content": raw_content})
+        
+    except Exception as e:
+        error_msg = f"AI call failed: {str(e)}"
+        error_logger.error(error_msg)
+        raise HTTPException(status_code=500, detail=error_msg)
+    
+    # 5. Process Actions & Handle Hallucinations
+    actions = ai_data.get("actions", [])
+    valid_actions_applied = []
+    
+    for act_data in actions:
+        action_type = act_data.get("action")
+        try:
+            if action_type == "create":
+                crud.create_card(session, act_data["column_id"], act_data["title"], act_data.get("details", ""), act_data.get("order", 0))
+                valid_actions_applied.append(act_data)
+            elif action_type == "move":
+                # Validate card existence
+                card = session.get(models.Card, act_data["card_id"])
+                if not card:
+                    raise Exception(f"Card ID {act_data['card_id']} does not exist.")
+                crud.move_card(session, act_data["card_id"], act_data["column_id"], act_data.get("order", 0))
+                valid_actions_applied.append(act_data)
+            elif action_type == "delete":
+                # Validate card existence
+                card = session.get(models.Card, act_data["card_id"])
+                if not card:
+                    raise Exception(f"Card ID {act_data['card_id']} does not exist.")
+                crud.delete_card(session, act_data["card_id"])
+                valid_actions_applied.append(act_data)
+        except Exception as e:
+            # Log hallucination/error
+            log_entry = {
+                "error": str(e),
+                "action_attempted": act_data,
+                "ai_full_response": raw_content
+            }
+            error_logger.error(json.dumps(log_entry))
+            
+    # 6. Return response + fresh board state
+    refreshed_board = crud.get_board_for_user(session, "user")
+    return {
+        "text": ai_data.get("text", "Done."),
+        "board": refreshed_board
+    }
 
 # --- FRONTEND ROUTING ---
 BASE_DIR = Path(__file__).resolve().parent.parent
