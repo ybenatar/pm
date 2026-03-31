@@ -33,11 +33,12 @@ def minify_context(board: BoardRead) -> str:
 def get_system_prompt(board: BoardRead) -> str:
     board_context = minify_context(board)
     
-    prompt = f"""You are an expert project management assistant for a Kanban board.
+    # Using a simple replacement approach to avoid all f-string/brace escaping issues
+    template = """You are an expert project management assistant for a Kanban board.
 Your task is to help the user manage their cards.
 
 CURRENT BOARD STATE:
-{board_context}
+{BOARD_CONTEXT}
 
 CONSTRAINTS:
 1. You can suggest 'create', 'move', 'delete', or 'edit' actions.
@@ -66,4 +67,4 @@ Response:
   ]
 }
 """
-    return prompt
+    return template.replace("{BOARD_CONTEXT}", board_context)
