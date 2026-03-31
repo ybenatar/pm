@@ -103,7 +103,30 @@ def delete_card(card_id: str, session: Session = Depends(get_session)):
         raise HTTPException(status_code=404, detail="Card not found")
     return {"status": "deleted"}
 
-@app.post("/api/ai/chat")
+def clean_ai_response(raw: str) -> str:
+    """Extracts and repairs JSON from markdown fences or noise."""
+    import re
+    # 1. Handle common markdown code block
+    if "```json" in raw:
+        raw = raw.split("```json")[1].split("```")[0]
+    elif "```" in raw:
+        raw = raw.split("```")[1].split("```")[0]
+        
+    # 2. Try to find the first { and last }
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start != -1 and end != -1:
+        raw = raw[start:end+1]
+        
+    # 3. Aggressive "Repair" for common AI mistakes
+    # Remove trailing commas before closing braces/brackets
+    raw = re.sub(r',\s*([\]}])', r'\1', raw)
+    # Ensure keys are double-quoted if they aren't (basic)
+    # raw = re.sub(r'(?<!")(\b\w+\b)(?=\s*:)', r'"\1"', raw) # Risky, but good for some models
+    
+    return raw.strip()
+
+@app.post("/api/ai/chat", response_model=models.AIChatResponse)
 async def ai_chat(req: AIChatRequest, session: Session = Depends(get_session)):
     global CHAT_HISTORY
     
@@ -130,12 +153,21 @@ async def ai_chat(req: AIChatRequest, session: Session = Depends(get_session)):
             messages=messages,
             response_format={ "type": "json_object" }
         )
-        raw_content = response.choices[0].message.content
-        ai_data = json.loads(raw_content)
+        raw_content = response.choices[0].message.content or ""
         
-        # Add to history
-        CHAT_HISTORY.append({"role": "user", "content": req.message})
-        CHAT_HISTORY.append({"role": "assistant", "content": raw_content})
+        # 4b. Clean Response (Models like gpt-oss-120b sometimes fail strict JSON mode)
+        cleaned_content = clean_ai_response(raw_content)
+        
+        try:
+            ai_data = json.loads(cleaned_content)
+        except json.JSONDecodeError:
+            # Fallback for malformed JSON
+            error_logger.error(f"Malformed JSON from AI (Cleaned): {cleaned_content} | Raw: {raw_content}")
+            return models.AIChatResponse(
+                text="I had trouble formatting the response correctly. Try being more specific.",
+                actions=[],
+                board=board
+            )
         
     except Exception as e:
         error_msg = f"AI call failed: {str(e)}"
@@ -145,19 +177,35 @@ async def ai_chat(req: AIChatRequest, session: Session = Depends(get_session)):
     # 5. Process Actions & Handle Hallucinations
     actions = ai_data.get("actions", [])
     valid_actions_applied = []
+    id_mapping_notes = [] # To feed back to history
     
     for act_data in actions:
         action_type = act_data.get("action")
         try:
             if action_type == "create":
-                crud.create_card(session, act_data["column_id"], act_data["title"], act_data.get("details", ""), act_data.get("order", 0))
+                new_card = crud.create_card(session, act_data["column_id"], act_data["title"], act_data.get("details", ""), act_data.get("order", 0))
                 valid_actions_applied.append(act_data)
+                id_mapping_notes.append(f"Card '{act_data['title']}' created with ID: {new_card.id}")
             elif action_type == "move":
                 # Validate card existence
                 card = session.get(models.Card, act_data["card_id"])
                 if not card:
                     raise Exception(f"Card ID {act_data['card_id']} does not exist.")
                 crud.move_card(session, act_data["card_id"], act_data["column_id"], act_data.get("order", 0))
+                valid_actions_applied.append(act_data)
+            elif action_type == "edit":
+                # Validate card existence
+                card = session.get(models.Card, act_data["card_id"])
+                if not card:
+                    raise Exception(f"Card ID {act_data['card_id']} does not exist.")
+                crud.update_card(
+                    session, 
+                    act_data["card_id"], 
+                    title=act_data.get("title"), 
+                    details=act_data.get("details"),
+                    column_id=act_data.get("column_id"),
+                    order=act_data.get("order")
+                )
                 valid_actions_applied.append(act_data)
             elif action_type == "delete":
                 # Validate card existence
@@ -175,12 +223,28 @@ async def ai_chat(req: AIChatRequest, session: Session = Depends(get_session)):
             }
             error_logger.error(json.dumps(log_entry))
             
+    # Add to history (including ID mappings for 'memory')
+    assistant_memory = raw_content
+    if id_mapping_notes:
+        assistant_memory += f"\n\n[SYSTEM NOTE: {'; '.join(id_mapping_notes)}]"
+        
+    CHAT_HISTORY.append({"role": "user", "content": req.message})
+    CHAT_HISTORY.append({"role": "assistant", "content": assistant_memory})
+            
     # 6. Return response + fresh board state
+    # Robust re-fetch with deep refresh
+    session.expire_all()
     refreshed_board = crud.get_board_for_user(session, "user")
-    return {
-        "text": ai_data.get("text", "Done."),
-        "board": refreshed_board
-    }
+    
+    # Debug trace
+    cols_count = len(refreshed_board.columns) if refreshed_board else 0
+    print(f"AI Success. Returning refreshed board with {cols_count} columns.")
+
+    return models.AIChatResponse(
+        text=ai_data.get("text", "Done."),
+        actions=valid_actions_applied,
+        board=refreshed_board
+    )
 
 # --- FRONTEND ROUTING ---
 BASE_DIR = Path(__file__).resolve().parent.parent

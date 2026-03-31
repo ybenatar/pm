@@ -70,3 +70,4 @@ class KanbanAction(SQLModel):
 class AIChatResponse(SQLModel):
     text: str
     actions: List[KanbanAction]
+    board: Optional[BoardRead] = None

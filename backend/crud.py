@@ -100,3 +100,22 @@ def move_card(session: Session, card_id: str, new_column_id: str, new_order: int
     session.commit()
     session.refresh(card)
     return card
+
+def update_card(session: Session, card_id: str, title: Optional[str] = None, details: Optional[str] = None, column_id: Optional[str] = None, order: Optional[int] = None) -> Optional[Card]:
+    card = session.get(Card, card_id)
+    if not card:
+        return None
+    
+    if title is not None:
+        card.title = title
+    if details is not None:
+        card.details = details
+        
+    # Handle move if column_id or order changes via update
+    if (column_id is not None and column_id != card.column_id) or (order is not None and order != card.order):
+        return move_card(session, card_id, column_id or card.column_id, order if order is not None else card.order)
+        
+    session.add(card)
+    session.commit()
+    session.refresh(card)
+    return card

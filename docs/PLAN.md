@@ -72,8 +72,8 @@
 - **Tests/Success Criteria**: Programmatically POST to `/api/ai/chat` requesting "Add a card for buying groceries to the Todo column". Expect the API to return the AI's confirmation text AND the structured DB representation indicating the new card exists. Check the actual SQLite DB to verify.
 
 ## Part 10: Beautiful Sidebar Widget Integration
-- [ ] Design and build an AI Chat widget component in NuxtJS placed gracefully in the sidebar layout.
-- [ ] Ensure the UI utilizes the established color palette (Accent Yellow `#ecad0a`, Blue Primary `#209dd7`, Purple Secondary `#753991`, Dark Navy `#032147`, Gray Text `#888888`).
-- [ ] Wire user chat submitting to the `/api/ai/chat` route. Display loading states (spinner or typing bubbles) while the system fetches OpenRouter.
-- [ ] Once the response maps back, update the Nuxt Kanban state locally using the newly returned board model structure (auto-refresh effect).
+- [x] Design and build an AI Chat widget component in NuxtJS placed gracefully in the sidebar layout.
+- [x] Ensure the UI utilizes the established color palette (Accent Yellow `#ecad0a`, Blue Primary `#209dd7`, Purple Secondary `#753991`, Dark Navy `#032147`, Gray Text `#888888`).
+- [x] Wire user chat submitting to the `/api/ai/chat` route. Display loading states (spinner or typing bubbles) while the system fetches OpenRouter.
+- [x] Once the response maps back, update the Nuxt Kanban state locally using the newly returned board model structure (auto-refresh effect).
 - **Tests/Success Criteria**: E2E check. In the web interface, the user types "move all cards from Doing to Done" into the beautiful chat sidebar. The AI responds reasonably, and the user directly watches the UI seamlessly animate or repopulate the cards dropping exclusively into the Done column.

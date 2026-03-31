@@ -2,7 +2,17 @@
 import { useBoard } from '~/composables/useBoard'
 import type { Column } from '~/composables/useBoard'
 
-const { columns, renameColumn, addCard, deleteCard, syncCardMove } = useBoard()
+const { columns, boardUpdated, fetchBoard, renameColumn, addCard, deleteCard, syncCardMove } = useBoard()
+
+onMounted(() => {
+  fetchBoard()
+})
+
+// Deep sync listener for AI actions
+watch(boardUpdated, (newVal) => {
+  console.log('[KanbanBoard] Signal received:', newVal)
+  fetchBoard()
+})
 
 /**
  * vue-draggable-plus mutates the cards array directly when dragging between columns.
