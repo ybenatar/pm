@@ -2,97 +2,106 @@ import { ref } from 'vue'
 
 export interface Card {
   id: string
+  column_id: string
   title: string
   details: string
+  order: number
 }
 
 export interface Column {
   id: string
+  board_id: string
   name: string
+  order: number
   cards: Card[]
 }
 
-function uid(): string {
-  return Math.random().toString(36).slice(2, 10)
+const columns = ref<Column[]>([])
+const isBoardLoading = ref(true)
+
+async function apiFetch<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options,
+  })
+  if (!res.ok) {
+    throw new Error(`API error ${res.status}: ${await res.text()}`)
+  }
+  // DELETE returns no body
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return undefined as T
+  }
+  return res.json()
 }
 
-const INITIAL_COLUMNS: Column[] = [
-  {
-    id: uid(),
-    name: 'Backlog',
-    cards: [
-      { id: uid(), title: 'Design system tokens', details: 'Define color palette, spacing, and typography variables.' },
-      { id: uid(), title: 'Set up CI pipeline', details: 'Configure GitHub Actions to run unit and E2E tests on every PR.' },
-      { id: uid(), title: 'Write API spec', details: 'Draft OpenAPI 3.0 specification for the user management endpoints.' },
-    ],
-  },
-  {
-    id: uid(),
-    name: 'To Do',
-    cards: [
-      { id: uid(), title: 'Build login page', details: 'Email + password login with form validation and error handling.' },
-      { id: uid(), title: 'Integrate auth tokens', details: 'Store JWT in httpOnly cookie and refresh on expiry.' },
-    ],
-  },
-  {
-    id: uid(),
-    name: 'In Progress',
-    cards: [
-      { id: uid(), title: 'Kanban drag-and-drop', details: 'Implement card drag between columns using vue-draggable-plus.' },
-      { id: uid(), title: 'Responsive layout', details: 'Ensure the board is usable on tablet-width viewports.' },
-    ],
-  },
-  {
-    id: uid(),
-    name: 'In Review',
-    cards: [
-      { id: uid(), title: 'Accessibility audit', details: 'Run axe-core and fix all critical WCAG AA violations.' },
-    ],
-  },
-  {
-    id: uid(),
-    name: 'Done',
-    cards: [
-      { id: uid(), title: 'Project scaffolding', details: 'Nuxt 3 app initialised with TypeScript, Vitest, and Playwright.' },
-      { id: uid(), title: 'Color scheme defined', details: 'Navy, yellow, purple, blue, and gray tokens agreed with the team.' },
-    ],
-  },
-]
-
-/**
- * Global board state singleton.
- * Provides reactive columns and all mutation operations.
- */
-const columns = ref<Column[]>(INITIAL_COLUMNS)
-
 export function useBoard() {
-  function renameColumn(columnId: string, name: string): void {
+  async function fetchBoard(): Promise<void> {
+    try {
+      isBoardLoading.value = true
+      const board = await apiFetch<{ id: string; owner_id: string; columns: Column[] }>('/api/board')
+      const sortedCols = board.columns.sort((a, b) => a.order - b.order)
+      sortedCols.forEach(col => col.cards.sort((a, b) => a.order - b.order))
+      columns.value = sortedCols
+    } catch (error) {
+      console.error('Failed to fetch board:', error)
+    } finally {
+      isBoardLoading.value = false
+    }
+  }
+
+  async function renameColumn(columnId: string, name: string): Promise<void> {
     const col = columns.value.find(c => c.id === columnId)
+    const oldName = col?.name
     if (col) col.name = name
+    try {
+      await apiFetch(`/api/column/${columnId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name }),
+      })
+    } catch (e) {
+      console.error('renameColumn failed:', e)
+      if (col && oldName) col.name = oldName
+    }
   }
 
-  function addCard(columnId: string, title: string, details: string): void {
+  async function addCard(columnId: string, title: string, details: string): Promise<void> {
     const col = columns.value.find(c => c.id === columnId)
-    if (col) col.cards.push({ id: uid(), title, details })
+    const order = col ? col.cards.length : 0
+    try {
+      const newCard = await apiFetch<Card>('/api/card', {
+        method: 'POST',
+        body: JSON.stringify({ column_id: columnId, title, details, order }),
+      })
+      if (col) col.cards.push(newCard)
+    } catch (error) {
+      console.error('addCard failed:', error)
+    }
   }
 
-  function deleteCard(columnId: string, cardId: string): void {
+  async function deleteCard(columnId: string, cardId: string): Promise<void> {
     const col = columns.value.find(c => c.id === columnId)
-    if (!col) return
-    col.cards = col.cards.filter(card => card.id !== cardId)
+    const idx = col?.cards.findIndex(c => c.id === cardId) ?? -1
+    const backup = idx > -1 ? col!.cards[idx] : undefined
+    if (idx > -1) col!.cards.splice(idx, 1)
+    try {
+      await apiFetch(`/api/card/${cardId}`, { method: 'DELETE' })
+    } catch (e) {
+      console.error('deleteCard failed:', e)
+      if (col && backup && idx > -1) col.cards.splice(idx, 0, backup)
+    }
   }
 
-  function moveCard(cardId: string, fromColumnId: string, toColumnId: string, toIndex: number): void {
-    const from = columns.value.find(c => c.id === fromColumnId)
-    const to = columns.value.find(c => c.id === toColumnId)
-    if (!from || !to) return
-
-    const cardIndex = from.cards.findIndex(c => c.id === cardId)
-    if (cardIndex === -1) return
-
-    const [card] = from.cards.splice(cardIndex, 1)
-    to.cards.splice(toIndex, 0, card)
+  async function syncCardMove(cardId: string, toColumnId: string, toIndex: number): Promise<void> {
+    try {
+      await apiFetch(`/api/card/${cardId}/move`, {
+        method: 'PUT',
+        body: JSON.stringify({ new_column_id: toColumnId, new_order: toIndex }),
+      })
+    } catch (e) {
+      console.error('syncCardMove failed, refetching:', e)
+      await fetchBoard()
+    }
   }
 
-  return { columns, renameColumn, addCard, deleteCard, moveCard }
+  return { columns, isBoardLoading, fetchBoard, renameColumn, addCard, deleteCard, syncCardMove }
 }

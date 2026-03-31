@@ -11,6 +11,7 @@ const emit = defineEmits<{
   addCard: [columnId: string, title: string, details: string]
   deleteCard: [columnId: string, cardId: string]
   cardsChanged: [columnId: string, cards: Column['cards']]
+  syncCardMove: [cardId: string, toColumnId: string, toIndex: number]
 }>()
 
 // Rename
@@ -50,11 +51,20 @@ function cancelForm() {
   showForm.value = false
 }
 
-// Drag-and-drop: vue-draggable-plus mutates the array in place
+// Drag-and-drop
 const localCards = computed({
   get: () => props.column.cards,
   set: (val) => emit('cardsChanged', props.column.id, val),
 })
+
+function onDragDrop(event: any) {
+  const newIdx = event.newIndex
+  const card = props.column.cards[newIdx]
+  
+  if (card) {
+    emit('syncCardMove', card.id, props.column.id, newIdx)
+  }
+}
 </script>
 
 <template>
@@ -85,6 +95,8 @@ const localCards = computed({
       chosen-class="drag-chosen"
       class="card-list"
       :id="`card-list-${column.id}`"
+      @update="onDragDrop"
+      @add="onDragDrop"
     >
       <KanbanCard
         v-for="card in column.cards"

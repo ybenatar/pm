@@ -2,7 +2,7 @@
 import { useBoard } from '~/composables/useBoard'
 import type { Column } from '~/composables/useBoard'
 
-const { columns, renameColumn, addCard, deleteCard, moveCard } = useBoard()
+const { columns, renameColumn, addCard, deleteCard, syncCardMove } = useBoard()
 
 /**
  * vue-draggable-plus mutates the cards array directly when dragging between columns.
@@ -24,6 +24,7 @@ function onCardsChanged(columnId: string, newCards: Column['cards']) {
       @addCard="addCard"
       @deleteCard="deleteCard"
       @cardsChanged="onCardsChanged"
+      @syncCardMove="syncCardMove"
     />
   </div>
 </template>

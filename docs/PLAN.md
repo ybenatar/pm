@@ -24,35 +24,37 @@
 - **Tests/Success Criteria**: Rebuild and start the Docker container. Hitting `http://localhost:8000/` serves the UI and shows the dummy NuxtJS Kanban board UI successfully.
 
 ## Part 4: Add in a fake user sign in experience
-- [ ] Create an explicit `/login` page or unified login component overlay in the NuxtJS UI.
-- [ ] Use a simple state variable or Nuxt `useState`/`localStorage` to track logged-in status.
-- [ ] Hardcode the allowed credentials: user: "user", password: "password".
-- [ ] Add a Nuxt middleware hook to protect the `/` route, redirecting to `/login` if no user state is found.
-- [ ] Update the main layout sidebar to include a prominent "Logout" button when the user is authenticated.
+- [x] Create an explicit `/login` page or unified login component overlay in the NuxtJS UI.
+- [x] Use a simple state variable or Nuxt `useState`/`localStorage` to track logged-in status.
+- [x] Hardcode the allowed credentials: user: "user", password: "password".
+- [x] Add a Nuxt middleware hook to protect the `/` route, redirecting to `/login` if no user state is found.
+- [x] Update the main layout sidebar to include a prominent "Logout" button when the user is authenticated.
 - **Tests/Success Criteria**: Initial load of `http://localhost:8000/` automatically redirects to the login screen. Submitting the exact credentials "user" / "password" successfully routes the user to the Kanban board. Clicking Logout invalidates the local state and returns the user to the login screen.
 
 ## Part 5: Database modeling
-- [ ] Propose and draft an absolute, minimal schema for SQLite (e.g., specific tables for `Board`, `Columns`, `Cards`, and maybe user-specific config if needed in the future).
-- [ ] Create `docs/SCHEMA.md` detailing the exact tables, columns, and relationships (storing card ordering cleanly is crucial).
-- [ ] Ask the user to review and sign off on `docs/SCHEMA.md` before writing DB backend logic.
+- [x] Propose and draft an absolute, minimal schema for SQLite (e.g., specific tables for `Board`, `Columns`, `Cards`, and maybe user-specific config if needed in the future).
+- [x] Create `docs/SCHEMA.md` detailing the exact tables, columns, and relationships (storing card ordering cleanly is crucial).
+- [x] Ask the user to review and sign off on `docs/SCHEMA.md` before writing DB backend logic.
 - **Tests/Success Criteria**: `docs/SCHEMA.md` document exists in the project and is explicitly reviewed and approved by the user.
 
 ## Part 6: Backend
-- [ ] Add `sqlite3` or `SQLAlchemy` (if ORM desired) to backend dependencies. Configuration must point database creation to the mounted volume path (e.g., `data/pm.db`).
-- [ ] Implement backend initialization logic in FastAPI startup event to connect and ensure all tables exist (or create them).
-- [ ] Create fully documented REST API routes for Kanban CRUD operations:
+- [x] Add `sqlite3` or `SQLAlchemy` (if ORM desired) to backend dependencies. Configuration must point database creation to the mounted volume path (e.g., `data/pm.db`).
+- [x] Implement backend initialization logic in FastAPI startup event to connect and ensure all tables exist (or create them).
+- [x] Create fully documented REST API routes for Kanban CRUD operations:
   - `GET /api/board`
   - `POST /api/column`, `PUT /api/column/{id}`, `DELETE /api/column/{id}`
   - `POST /api/card`, `PUT /api/card/{id}`, `DELETE /api/card/{id}`
-- [ ] Add backend unit tests using `pytest` and `httpx` to validate logic. Aim for a sensible ~80% test coverage on critical database & route logic, focusing exclusively on valuable tests rather than empty boilerplate coverage.
+- [x] Add backend unit tests using `pytest` and `httpx` to validate logic. Aim for a sensible ~80% test coverage on critical database & route logic, focusing exclusively on valuable tests rather than empty boilerplate coverage.
 - **Tests/Success Criteria**: `pytest` passes 100%. API requests independently using `curl` or Postman to endpoints return expected JSON. Database file persists after Docker container restart.
 
 ## Part 7: Frontend + Backend Integration
-- [ ] Strip out the hardcoded dummy data from the NuxtJS frontend.
-- [ ] Write `fetch` wrappers or use Nuxt `$fetch` in composables to point requests to backend endpoints.
-- [ ] Upon app load (after login), `GET /api/board` should fetch the persistent board state.
-- [ ] Update UI operations (creating a card, editing title, drag-and-drop moving) to trigger optimistic UI updates and a corresponding backend API call (`POST` / `PUT`) in the background.
-- **Tests/Success Criteria**: End-to-end verification. The user can create a card in the UI, physically stop and rebuild the Docker container (`stop.bat`, `start.bat`), fetch the app again, and the card perfectly persists in its new state.
+- [x] Strip out the hardcoded dummy data from the NuxtJS frontend.
+- [x] Implement `apiFetch` wrapper using native `fetch()` in `useBoard.ts` (replacing `$fetch` for reliable SSG/CSR execution).
+- [x] Upon app load (after login), `GET /api/board` should fetch the persistent board state.
+- [x] Update `KanbanColumn.vue` to use SortableJS events (`@update`, `@add`) for precise drag-and-drop tracking.
+- [x] Implement **Optimistic UI** updates for creating, moving, and deleting cards to ensure zero-latency UX.
+- **Design Decision**: Database path set to `sqlite:////app/data/pm.db` (absolute path) to strictly align with Docker volume mount at `/app/data/`.
+- **Tests/Success Criteria**: End-to-end verification. Newly created cards and moved cards persist after browser refresh (F5) and full Docker container restart.
 
 ## Part 8: AI Connectivity Scaffolding
 - [ ] Add the `openai` Python SDK via `uv` to the backend.
