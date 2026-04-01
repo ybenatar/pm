@@ -40,7 +40,7 @@ function sortBoard(boardColumns: Column[]): Column[] {
     const sorted = [...boardColumns].sort((a: Column, b: Column) => (a.order || 0) - (b.order || 0))
     sorted.forEach((col: Column) => {
       if (col.cards && Array.isArray(col.cards)) {
-        col.cards.sort((a: Card, b: Card) => (a.order || 0) - (b.order || 0))
+        col.cards = [...col.cards].sort((a: Card, b: Card) => (a.order || 0) - (b.order || 0))
       } else {
         col.cards = []
       }
@@ -56,34 +56,33 @@ export function useBoard() {
   const columns = useState<Column[]>('board:columns', () => [])
   const isBoardLoading = useState<boolean>('board:loading', () => true)
   const boardUpdated = useState<number>('board:signal', () => 0)
+  const isError = useState<boolean>('board:error', () => false)
 
   function triggerRefresh() {
-    console.log('[useBoard] Signal: Refresh triggered.')
     boardUpdated.value++
   }
 
   async function fetchBoard(): Promise<void> {
-    console.log('[useBoard] Action: fetchBoard starting...')
     try {
+      isError.value = false
       // Background refresh if data already exists to avoid UI flicker/loop
       if (columns.value.length === 0) {
         isBoardLoading.value = true
       }
-      
+
       const board = await apiFetch<{ id: string; owner_id: string; columns: Column[] }>('/api/board')
       if (board && board.columns) {
         columns.value = sortBoard(board.columns)
       }
     } catch (error) {
       console.error('[useBoard] Error: fetchBoard failed', error)
+      isError.value = true
     } finally {
       isBoardLoading.value = false
-      console.log('[useBoard] State: fetchBoard complete.')
     }
   }
 
   function setBoard(newColumns: Column[]): void {
-    console.log('Syncing board with new columns:', newColumns.length)
     columns.value = sortBoard(newColumns)
   }
 
@@ -141,5 +140,5 @@ export function useBoard() {
     }
   }
 
-  return { columns, isBoardLoading, boardUpdated, fetchBoard, setBoard, triggerRefresh, renameColumn, addCard, deleteCard, syncCardMove }
+  return { columns, isBoardLoading, isError, boardUpdated, fetchBoard, setBoard, triggerRefresh, renameColumn, addCard, deleteCard, syncCardMove }
 }

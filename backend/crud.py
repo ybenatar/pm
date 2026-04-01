@@ -1,5 +1,7 @@
+import time
 from sqlmodel import Session, select
 from typing import Optional, List
+from sqlalchemy.exc import IntegrityError
 from models import User, Board, Column, Card
 
 def get_user_by_username(session: Session, username: str) -> Optional[User]:
@@ -8,43 +10,50 @@ def get_user_by_username(session: Session, username: str) -> Optional[User]:
 def create_default_user_and_board(session: Session):
     user = get_user_by_username(session, "user")
     if not user:
-        user = User(username="user", password_hash="dummy_hash")
-        session.add(user)
-        session.commit()
-        session.refresh(user)
-        
-        board = Board(owner_id=user.id)
-        session.add(board)
-        session.commit()
-        session.refresh(board)
-        
-        col_backlog = Column(board_id=board.id, name="Backlog", order=0)
-        col_todo = Column(board_id=board.id, name="To Do", order=1)
-        col_progress = Column(board_id=board.id, name="In Progress", order=2)
-        col_review = Column(board_id=board.id, name="In Review", order=3)
-        col_done = Column(board_id=board.id, name="Done", order=4)
-        
-        session.add_all([col_backlog, col_todo, col_progress, col_review, col_done])
-        session.commit()
+        try:
+            user = User(username="user", password_hash="dummy_hash")
+            session.add(user)
+            session.commit()
+            session.refresh(user)
+        except IntegrityError:
+            session.rollback()
+            user = get_user_by_username(session, "user")
 
-        cards = [
-            Card(column_id=col_backlog.id, title="Design system tokens", details="Define color palette, spacing, and typography variables.", order=0),
-            Card(column_id=col_backlog.id, title="Set up CI pipeline", details="Configure GitHub Actions to run unit and E2E tests on every PR.", order=1),
-            Card(column_id=col_backlog.id, title="Write API spec", details="Draft OpenAPI 3.0 specification for the user management endpoints.", order=2),
-            
-            Card(column_id=col_todo.id, title="Build login page", details="Email + password login with form validation and error handling.", order=0),
-            Card(column_id=col_todo.id, title="Integrate auth tokens", details="Store JWT in httpOnly cookie and refresh on expiry.", order=1),
-            
-            Card(column_id=col_progress.id, title="Kanban drag-and-drop", details="Implement card drag between columns using vue-draggable-plus.", order=0),
-            Card(column_id=col_progress.id, title="Responsive layout", details="Ensure the board is usable on tablet-width viewports.", order=1),
-            
-            Card(column_id=col_review.id, title="Accessibility audit", details="Run axe-core and fix all critical WCAG AA violations.", order=0),
-            
-            Card(column_id=col_done.id, title="Project scaffolding", details="Nuxt 3 app initialised with TypeScript, Vitest, and Playwright.", order=0),
-            Card(column_id=col_done.id, title="Color scheme defined", details="Navy, yellow, purple, blue, and gray tokens agreed with the team.", order=1),
-        ]
-        session.add_all(cards)
-        session.commit()
+    if user and user.boards:
+        return
+
+    board = Board(owner_id=user.id)
+    session.add(board)
+    session.commit()
+    session.refresh(board)
+
+    col_backlog = Column(board_id=board.id, name="Backlog", order=0)
+    col_todo = Column(board_id=board.id, name="To Do", order=1)
+    col_progress = Column(board_id=board.id, name="In Progress", order=2)
+    col_review = Column(board_id=board.id, name="In Review", order=3)
+    col_done = Column(board_id=board.id, name="Done", order=4)
+
+    session.add_all([col_backlog, col_todo, col_progress, col_review, col_done])
+    session.commit()
+
+    cards = [
+        Card(column_id=col_backlog.id, title="Design system tokens", details="Define color palette, spacing, and typography variables.", order=0),
+        Card(column_id=col_backlog.id, title="Set up CI pipeline", details="Configure GitHub Actions to run unit and E2E tests on every PR.", order=1),
+        Card(column_id=col_backlog.id, title="Write API spec", details="Draft OpenAPI 3.0 specification for the user management endpoints.", order=2),
+
+        Card(column_id=col_todo.id, title="Build login page", details="Email + password login with form validation and error handling.", order=0),
+        Card(column_id=col_todo.id, title="Integrate auth tokens", details="Store JWT in httpOnly cookie and refresh on expiry.", order=1),
+
+        Card(column_id=col_progress.id, title="Kanban drag-and-drop", details="Implement card drag between columns using vue-draggable-plus.", order=0),
+        Card(column_id=col_progress.id, title="Responsive layout", details="Ensure the board is usable on tablet-width viewports.", order=1),
+
+        Card(column_id=col_review.id, title="Accessibility audit", details="Run axe-core and fix all critical WCAG AA violations.", order=0),
+
+        Card(column_id=col_done.id, title="Project scaffolding", details="Nuxt 3 app initialised with TypeScript, Vitest, and Playwright.", order=0),
+        Card(column_id=col_done.id, title="Color scheme defined", details="Navy, yellow, purple, blue, and gray tokens agreed with the team.", order=1),
+    ]
+    session.add_all(cards)
+    session.commit()
 
 def get_board_for_user(session: Session, username: str) -> Optional[Board]:
     user = get_user_by_username(session, username)
@@ -99,6 +108,19 @@ def move_card(session: Session, card_id: str, new_column_id: str, new_order: int
     
     session.commit()
     session.refresh(card)
+
+    # Renormalize orders in destination column to be contiguous (0, 1, 2...)
+    all_dest_cards = session.exec(
+        select(Card)
+        .where(Card.column_id == new_column_id)
+        .order_by(Card.order)
+    ).all()
+    for i, c in enumerate(all_dest_cards):
+        if c.order != i:
+            c.order = i
+            session.add(c)
+    session.commit()
+    session.refresh(card)
     return card
 
 def update_card(session: Session, card_id: str, title: Optional[str] = None, details: Optional[str] = None, column_id: Optional[str] = None, order: Optional[int] = None) -> Optional[Card]:
@@ -110,12 +132,29 @@ def update_card(session: Session, card_id: str, title: Optional[str] = None, det
         card.title = title
     if details is not None:
         card.details = details
-        
+
+    session.add(card)
+    session.commit()
+
     # Handle move if column_id or order changes via update
     if (column_id is not None and column_id != card.column_id) or (order is not None and order != card.order):
         return move_card(session, card_id, column_id or card.column_id, order if order is not None else card.order)
-        
-    session.add(card)
-    session.commit()
+
     session.refresh(card)
     return card
+
+def get_chat_history(session: Session, board_id: str, limit: int):
+    from models import ChatMessage
+    messages = session.exec(
+        select(ChatMessage)
+        .where(ChatMessage.board_id == board_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(limit)
+    ).all()
+    return list(reversed(messages))
+
+def add_chat_message(session: Session, board_id: str, role: str, content: str):
+    from models import ChatMessage
+    msg = ChatMessage(board_id=board_id, role=role, content=content, created_at=int(time.time()))
+    session.add(msg)
+    session.commit()

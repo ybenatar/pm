@@ -19,11 +19,14 @@ fh = logging.FileHandler("error.log")
 fh.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
 error_logger.addHandler(fh)
 
-# In-memory history (Server-side)
-CHAT_HISTORY = [] # List of {"role": "user/assistant", "content": "..."}
+# AUTH NOTE: This app has no backend authentication. All endpoints operate as
+# a single hardcoded user ("user"). This is intentional for a local-only MVP.
+# Do not expose port 8000 on a network without adding proper authentication.
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        print("WARNING: OPENROUTER_API_KEY not set — AI endpoints will fail")
     init_db()
     # Safely seed default user and MVP Board upon startup
     try:
@@ -104,32 +107,19 @@ def delete_card(card_id: str, session: Session = Depends(get_session)):
     return {"status": "deleted"}
 
 def clean_ai_response(raw: str) -> str:
-    """Extracts and repairs JSON from markdown fences or noise."""
-    import re
-    # 1. Handle common markdown code block
+    """Extracts JSON from markdown fences."""
     if "```json" in raw:
         raw = raw.split("```json")[1].split("```")[0]
     elif "```" in raw:
         raw = raw.split("```")[1].split("```")[0]
-        
-    # 2. Try to find the first { and last }
     start = raw.find("{")
     end = raw.rfind("}")
     if start != -1 and end != -1:
         raw = raw[start:end+1]
-        
-    # 3. Aggressive "Repair" for common AI mistakes
-    # Remove trailing commas before closing braces/brackets
-    raw = re.sub(r',\s*([\]}])', r'\1', raw)
-    # Ensure keys are double-quoted if they aren't (basic)
-    # raw = re.sub(r'(?<!")(\b\w+\b)(?=\s*:)', r'"\1"', raw) # Risky, but good for some models
-    
     return raw.strip()
 
 @app.post("/api/ai/chat", response_model=models.AIChatResponse)
 async def ai_chat(req: AIChatRequest, session: Session = Depends(get_session)):
-    global CHAT_HISTORY
-    
     # 1. Get current board state
     board = crud.get_board_for_user(session, "user")
     if not board:
@@ -138,12 +128,14 @@ async def ai_chat(req: AIChatRequest, session: Session = Depends(get_session)):
     # 2. Build system prompt
     system_prompt = ai.get_system_prompt(board)
     
-    # 3. Manage History
+    # 3. Load history from DB
     limit = ai.get_history_limit()
-    if len(CHAT_HISTORY) > limit * 2: # roles: user + assistant
-        CHAT_HISTORY = CHAT_HISTORY[-(limit * 2):]
-        
-    messages = [{"role": "system", "content": system_prompt}] + CHAT_HISTORY + [{"role": "user", "content": req.message}]
+    history = crud.get_chat_history(session, board.id, limit * 2)
+    messages = (
+        [{"role": "system", "content": system_prompt}]
+        + [{"role": m.role, "content": m.content} for m in history]
+        + [{"role": "user", "content": req.message}]
+    )
     
     # 4. Call AI
     try:
@@ -223,13 +215,13 @@ async def ai_chat(req: AIChatRequest, session: Session = Depends(get_session)):
             }
             error_logger.error(json.dumps(log_entry))
             
-    # Add to history (including ID mappings for 'memory')
+    # Persist history to DB
     assistant_memory = raw_content
     if id_mapping_notes:
         assistant_memory += f"\n\n[SYSTEM NOTE: {'; '.join(id_mapping_notes)}]"
-        
-    CHAT_HISTORY.append({"role": "user", "content": req.message})
-    CHAT_HISTORY.append({"role": "assistant", "content": assistant_memory})
+
+    crud.add_chat_message(session, board.id, "user", req.message)
+    crud.add_chat_message(session, board.id, "assistant", assistant_memory)
             
     # 6. Return response + fresh board state
     # Robust re-fetch with deep refresh
@@ -240,11 +232,23 @@ async def ai_chat(req: AIChatRequest, session: Session = Depends(get_session)):
     cols_count = len(refreshed_board.columns) if refreshed_board else 0
     print(f"AI Success. Returning refreshed board with {cols_count} columns.")
 
+    ai_text = ai_data.get("text", "Done.")
+    if actions and not valid_actions_applied:
+        ai_text += " (No actions could be applied — card IDs may be stale. Try refreshing.)"
+
     return models.AIChatResponse(
-        text=ai_data.get("text", "Done."),
+        text=ai_text,
         actions=valid_actions_applied,
         board=refreshed_board
     )
+
+@app.get("/api/chat/history")
+def get_chat_history_endpoint(session: Session = Depends(get_session)):
+    board = crud.get_board_for_user(session, "user")
+    if not board:
+        return []
+    messages = crud.get_chat_history(session, board.id, limit=100)
+    return [{"role": m.role, "content": m.content} for m in messages]
 
 # --- FRONTEND ROUTING ---
 BASE_DIR = Path(__file__).resolve().parent.parent

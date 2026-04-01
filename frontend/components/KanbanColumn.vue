@@ -59,8 +59,9 @@ const localCards = computed({
 
 function onDragDrop(event: any) {
   const newIdx = event.newIndex
+  if (newIdx === undefined || newIdx === null) return
   const card = props.column.cards[newIdx]
-  
+
   if (card) {
     emit('syncCardMove', card.id, props.column.id, newIdx)
   }

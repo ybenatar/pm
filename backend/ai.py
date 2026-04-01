@@ -10,7 +10,7 @@ def get_client() -> OpenAI:
         base_url="https://openrouter.ai/api/v1",
     )
 
-MODEL = "openai/gpt-oss-120b"
+MODEL = os.environ.get("AI_MODEL", "openai/gpt-oss-120b")
 
 def get_history_limit() -> int:
     try:
@@ -24,8 +24,11 @@ def minify_context(board: BoardRead) -> str:
     for col in board.columns:
         cards = []
         for c in col.cards:
-            desc = f" | Description: {c.details}" if c.details.strip() else " | (No description)"
-            cards.append(f"[{c.id}] {c.title}{desc}")
+            title = c.title[:80].replace("{BOARD_CONTEXT}", "")
+            details_text = c.details[:150] + ("..." if len(c.details) > 150 else "")
+            details_text = details_text.replace("{BOARD_CONTEXT}", "")
+            desc = f" | Description: {details_text}" if c.details.strip() else " | (No description)"
+            cards.append(f"[{c.id}] {title}{desc}")
         
         context.append(f"Column: {col.name} (ID: {col.id})\nCards:\n  " + ("\n  ".join(cards) if cards else "None"))
     return "\n".join(context)

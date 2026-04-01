@@ -18,7 +18,7 @@ class Board(SQLModel, table=True):
     owner_id: str = Field(foreign_key="user.id")
     
     owner: User = Relationship(back_populates="boards")
-    columns: List["Column"] = Relationship(back_populates="board")
+    columns: List["Column"] = Relationship(back_populates="board", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
 class Column(SQLModel, table=True):
     id: str = Field(default_factory=generate_uuid, primary_key=True)
@@ -27,7 +27,7 @@ class Column(SQLModel, table=True):
     order: int
     
     board: Board = Relationship(back_populates="columns")
-    cards: List["Card"] = Relationship(back_populates="column_relation")
+    cards: List["Card"] = Relationship(back_populates="column_relation", sa_relationship_kwargs={"cascade": "all, delete-orphan"})
 
 class Card(SQLModel, table=True):
     id: str = Field(default_factory=generate_uuid, primary_key=True)
@@ -37,6 +37,13 @@ class Card(SQLModel, table=True):
     order: int
     
     column_relation: Column = Relationship(back_populates="cards")
+
+class ChatMessage(SQLModel, table=True):
+    id: str = Field(default_factory=generate_uuid, primary_key=True)
+    board_id: str = Field(foreign_key="board.id")
+    role: str
+    content: str
+    created_at: int
 
 # --- READ MODELS FOR API SERIALIZATION ---
 class CardRead(SQLModel):
@@ -57,6 +64,10 @@ class BoardRead(SQLModel):
     id: str
     owner_id: str
     columns: List[ColumnRead] = []
+
+class ChatMessageRead(SQLModel):
+    role: str
+    content: str
 
 # --- AI CHAT MODELS ---
 class KanbanAction(SQLModel):

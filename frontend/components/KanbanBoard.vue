@@ -4,10 +4,6 @@ import type { Column } from '~/composables/useBoard'
 
 const { columns, boardUpdated, fetchBoard, renameColumn, addCard, deleteCard, syncCardMove } = useBoard()
 
-onMounted(() => {
-  fetchBoard()
-})
-
 // Deep sync listener for AI actions
 watch(boardUpdated, (newVal) => {
   console.log('[KanbanBoard] Signal received:', newVal)

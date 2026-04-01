@@ -1,38 +1,57 @@
 <script setup lang="ts">
 import { ref, onMounted, nextTick } from 'vue'
 import { useBoard } from '~/composables/useBoard'
-const { setBoard, triggerRefresh } = useBoard()
+const { setBoard } = useBoard()
 
 const messages = ref<{role: 'user' | 'assistant', text: string}[]>([])
 const input = ref('')
 const isLoading = ref(false)
 const scrollContainer = ref<HTMLElement | null>(null)
 
-// Load history from localStorage on mount
-onMounted(() => {
-  const savedMessages = localStorage.getItem('pm_ai_history')
-  if (savedMessages) {
-    messages.value = JSON.parse(savedMessages)
-  } else {
-    // AI Welcome Message (First load only)
-    messages.value.push({
-      role: 'assistant',
-      text: "Hello! I'm your AI Kanban assistant. I can help you create, move, or delete cards. Try saying 'Add a card buy milk to To Do'!"
-    })
-    saveMessages()
+const WELCOME_MSG = { role: 'assistant' as const, text: "Hello! I'm your AI Kanban assistant. I can help you create, move, or delete cards. Try saying 'Add a card buy milk to To Do'!" }
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/chat/history')
+    if (res.ok) {
+      const history = await res.json()
+      if (history.length > 0) {
+        messages.value = history.map((m: { role: 'user' | 'assistant', content: string }) => ({
+          role: m.role,
+          text: m.content
+        }))
+      } else {
+        messages.value = [WELCOME_MSG]
+      }
+      localStorage.removeItem('pm_ai_history')
+    } else {
+      loadFromLocalStorage()
+    }
+  } catch {
+    loadFromLocalStorage()
   }
 })
 
+function loadFromLocalStorage() {
+  try {
+    const saved = localStorage.getItem('pm_ai_history')
+    if (saved) {
+      messages.value = JSON.parse(saved)
+    } else {
+      messages.value = [WELCOME_MSG]
+    }
+  } catch {
+    localStorage.removeItem('pm_ai_history')
+    messages.value = [WELCOME_MSG]
+  }
+}
+
 function saveMessages() {
-  localStorage.setItem('pm_ai_history', JSON.stringify(messages.value))
+  localStorage.setItem('pm_ai_history', JSON.stringify(messages.value.slice(-100)))
 }
 
 function clearChat() {
-  messages.value = [{
-    role: 'assistant',
-    text: "Chat cleared! How can I help you next?"
-  }]
-  saveMessages()
+  messages.value = [WELCOME_MSG]
 }
 
 const scrollToBottom = async () => {
@@ -50,7 +69,6 @@ async function sendMessage() {
   input.value = ''
   isLoading.value = true
   scrollToBottom()
-  saveMessages()
 
   try {
     const res = await fetch('/api/ai/chat', {
@@ -65,17 +83,14 @@ async function sendMessage() {
     
     // Update local chat
     messages.value.push({ role: 'assistant', text: data.text })
-    saveMessages()
-    
+
     // Sync the board state if returned
     if (data.board && data.board.columns) {
       setBoard(data.board.columns)
-      triggerRefresh()
     }
   } catch (error) {
     messages.value.push({ role: 'assistant', text: "Sorry, I had trouble connecting to the brain. Please try again." })
     console.error('AI chat failed:', error)
-    saveMessages()
   } finally {
     isLoading.value = false
     scrollToBottom()

@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: './tests/e2e',
   timeout: 30000,
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL: 'http://localhost:8000',
     headless: true,
   },
   projects: [
@@ -13,11 +13,11 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  // Dev server must be running separately
+  // Expects the Docker container to be running at port 8000
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
+    command: 'echo "Using Docker container at port 8000"',
+    url: 'http://localhost:8000/api/health',
     reuseExistingServer: true,
-    timeout: 60000,
+    timeout: 10000,
   },
 })

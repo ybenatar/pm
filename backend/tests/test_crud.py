@@ -1,7 +1,3 @@
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
@@ -22,22 +18,15 @@ def get_session_override():
     with Session(engine) as session:
         yield session
 
-# Override the production database dependency dynamically with the testing in-memory instance
-app.dependency_overrides[get_session] = get_session_override
-
 @pytest.fixture(name="client")
 def client_fixture():
-    # Setup the internal tables safely
+    app.dependency_overrides[get_session] = get_session_override
     SQLModel.metadata.create_all(engine)
-    
-    # Pre-seed the test database cleanly
     with Session(engine) as session:
         crud.create_default_user_and_board(session)
-        
-    client = TestClient(app)
-    yield client
-    
-    # Teardown to prevent test leakage
+    with TestClient(app) as client:
+        yield client
+    app.dependency_overrides.pop(get_session, None)
     SQLModel.metadata.drop_all(engine)
 
 
@@ -53,7 +42,7 @@ def test_fetch_board(client: TestClient):
     data = response.json()
     
     assert data["owner_id"] is not None
-    assert len(data["columns"]) == 3
+    assert len(data["columns"]) == 5
     
     # Check default seeded column names
     col_names = [col["name"] for col in data["columns"]]

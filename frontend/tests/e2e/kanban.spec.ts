@@ -1,8 +1,16 @@
+// NOTE: These tests mutate the database. Run against a fresh Docker volume:
+// docker volume rm pm_data && scripts/start.bat (or start.sh)
+// before running E2E tests to ensure a clean initial state.
 import { test, expect } from '@playwright/test'
 
 test.describe('Kanban Board', () => {
-  test.beforeEach(async ({ page }) => {
-    await page.goto('/')
+  test.beforeEach(async ({ page, context }) => {
+    await context.clearCookies()
+    await page.goto('/login')
+    await page.locator('input[type="text"]').fill('user')
+    await page.locator('input[type="password"]').fill('password')
+    await page.locator('button[type="submit"]').click()
+    await page.waitForURL('**/', { timeout: 10000 })
   })
 
   test('loads with 5 columns and dummy cards', async ({ page }) => {
@@ -60,11 +68,18 @@ test.describe('Kanban Board', () => {
   })
 
   test('drags a card from one column to another', async ({ page }) => {
-    // Grab the first card from column 1
     const col1 = page.locator('[id^="column-"]').nth(0)
     const col2 = page.locator('[id^="column-"]').nth(1)
 
-    const card = col1.locator('.card').first()
+    // Ensure col1 has a card to drag by adding one
+    const colId = await col1.getAttribute('id').then(id => id?.replace('column-', ''))
+    await page.locator(`#add-card-btn-${colId}`).click()
+    await page.locator(`#new-card-title-${colId}`).fill('Drag me')
+    await page.locator(`#new-card-details-${colId}`).fill('drag test card')
+    await page.locator(`#submit-card-${colId}`).click()
+    await expect(col1.locator('.card-title').filter({ hasText: 'Drag me' })).toBeVisible()
+
+    const card = col1.locator('.card').filter({ hasText: 'Drag me' })
     const cardTitle = await card.locator('.card-title').textContent()
 
     const col1CountBefore = await col1.locator('.card').count()

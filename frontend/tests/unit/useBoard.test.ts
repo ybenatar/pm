@@ -1,127 +1,132 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { ref } from 'vue'
+
+// Mock Nuxt's useState as a plain ref
+vi.stubGlobal('useState', <T>(_key: string, init: () => T) => ref(init()))
+
 import { useBoard } from '../../composables/useBoard'
+
+const mockColumn = (id: string, name: string, cards: any[] = []) => ({
+  id, board_id: 'board1', name, order: 0, cards
+})
+const mockCard = (id: string, colId: string, title = 'Task', details = '') => ({
+  id, column_id: colId, title, details, order: 0
+})
+
+const makeFetch = (data: any, ok = true) =>
+  vi.fn().mockResolvedValue({
+    ok,
+    status: ok ? 200 : 500,
+    headers: { get: () => null },
+    json: () => Promise.resolve(data),
+    text: () => Promise.resolve(JSON.stringify(data)),
+  })
 
 describe('useBoard', () => {
   let board: ReturnType<typeof useBoard>
 
   beforeEach(() => {
+    vi.restoreAllMocks()
     board = useBoard()
   })
 
-  describe('initial state', () => {
-    it('has exactly 5 columns', () => {
-      expect(board.columns.value).toHaveLength(5)
+  describe('fetchBoard', () => {
+    it('loads columns from the API', async () => {
+      const col = mockColumn('c1', 'To Do')
+      vi.stubGlobal('fetch', makeFetch({ id: 'b1', owner_id: 'u1', columns: [col] }))
+      await board.fetchBoard()
+      expect(board.columns.value).toHaveLength(1)
+      expect(board.columns.value[0].name).toBe('To Do')
     })
 
-    it('each column has an id, name, and cards array', () => {
-      for (const col of board.columns.value) {
-        expect(col).toHaveProperty('id')
-        expect(col).toHaveProperty('name')
-        expect(col).toHaveProperty('cards')
-        expect(Array.isArray(col.cards)).toBe(true)
-      }
+    it('sets isBoardLoading to false after fetch', async () => {
+      vi.stubGlobal('fetch', makeFetch({ id: 'b1', owner_id: 'u1', columns: [] }))
+      await board.fetchBoard()
+      expect(board.isBoardLoading.value).toBe(false)
     })
+  })
 
-    it('seeds dummy cards so the board is not empty', () => {
-      const total = board.columns.value.reduce((sum, col) => sum + col.cards.length, 0)
-      expect(total).toBeGreaterThan(0)
-    })
-
-    it('each card has an id, title, and details', () => {
-      const allCards = board.columns.value.flatMap(col => col.cards)
-      for (const card of allCards) {
-        expect(card).toHaveProperty('id')
-        expect(card).toHaveProperty('title')
-        expect(card).toHaveProperty('details')
-      }
+  describe('setBoard', () => {
+    it('replaces columns with sorted result', () => {
+      const cols = [
+        mockColumn('c2', 'Done', []),
+        mockColumn('c1', 'To Do', []),
+      ].map((c, i) => ({ ...c, order: i }))
+      board.setBoard(cols)
+      expect(board.columns.value).toHaveLength(2)
     })
   })
 
   describe('renameColumn', () => {
-    it('updates the column name', () => {
-      const col = board.columns.value[0]
-      board.renameColumn(col.id, 'Renamed')
-      expect(board.columns.value[0].name).toBe('Renamed')
+    it('optimistically updates the column name', async () => {
+      board.setBoard([mockColumn('c1', 'Backlog')])
+      vi.stubGlobal('fetch', makeFetch({ id: 'c1', name: 'Sprint 1', board_id: 'b1', order: 0 }))
+      const p = board.renameColumn('c1', 'Sprint 1')
+      expect(board.columns.value[0].name).toBe('Sprint 1')
+      await p
     })
 
-    it('does nothing for an unknown column id', () => {
-      const names = board.columns.value.map(c => c.name)
-      board.renameColumn('non-existent', 'X')
-      expect(board.columns.value.map(c => c.name)).toEqual(names)
+    it('rolls back the name if the API call fails', async () => {
+      board.setBoard([mockColumn('c1', 'Backlog')])
+      vi.stubGlobal('fetch', makeFetch({}, false))
+      await board.renameColumn('c1', 'Sprint 1')
+      expect(board.columns.value[0].name).toBe('Backlog')
     })
   })
 
   describe('addCard', () => {
-    it('adds a card to the correct column', () => {
-      const col = board.columns.value[0]
-      const before = col.cards.length
-      board.addCard(col.id, 'New task', 'Some details')
-      expect(board.columns.value[0].cards).toHaveLength(before + 1)
+    it('adds the card returned by the API to the column', async () => {
+      board.setBoard([mockColumn('c1', 'To Do')])
+      const newCard = mockCard('card1', 'c1', 'New task', 'Details')
+      vi.stubGlobal('fetch', makeFetch(newCard))
+      await board.addCard('c1', 'New task', 'Details')
+      expect(board.columns.value[0].cards).toHaveLength(1)
+      expect(board.columns.value[0].cards[0].title).toBe('New task')
     })
 
-    it('the new card has the correct title and details', () => {
-      const col = board.columns.value[0]
-      board.addCard(col.id, 'My task', 'My details')
-      const card = board.columns.value[0].cards.at(-1)!
-      expect(card.title).toBe('My task')
-      expect(card.details).toBe('My details')
-    })
-
-    it('the new card has a unique id', () => {
-      const col = board.columns.value[0]
-      board.addCard(col.id, 'A', '')
-      board.addCard(col.id, 'B', '')
-      const cards = board.columns.value[0].cards
-      const ids = cards.map(c => c.id)
-      expect(new Set(ids).size).toBe(ids.length)
-    })
-
-    it('does nothing for an unknown column id', () => {
-      const totalBefore = board.columns.value.reduce((s, c) => s + c.cards.length, 0)
-      board.addCard('non-existent', 'X', 'Y')
-      const totalAfter = board.columns.value.reduce((s, c) => s + c.cards.length, 0)
-      expect(totalAfter).toBe(totalBefore)
+    it('does nothing for an unknown column id', async () => {
+      board.setBoard([mockColumn('c1', 'To Do')])
+      const newCard = mockCard('card1', 'unknown', 'New task', '')
+      vi.stubGlobal('fetch', makeFetch(newCard))
+      await board.addCard('unknown', 'New task', '')
+      expect(board.columns.value[0].cards).toHaveLength(0)
     })
   })
 
   describe('deleteCard', () => {
-    it('removes the card from its column', () => {
-      const col = board.columns.value[0]
-      const card = col.cards[0]
-      board.deleteCard(col.id, card.id)
-      expect(board.columns.value[0].cards.find(c => c.id === card.id)).toBeUndefined()
+    it('optimistically removes the card', async () => {
+      const card = mockCard('card1', 'c1', 'Task')
+      board.setBoard([mockColumn('c1', 'To Do', [card])])
+      vi.stubGlobal('fetch', makeFetch(undefined, true).mockResolvedValue({
+        ok: true, status: 204,
+        headers: { get: () => '0' },
+        json: () => Promise.resolve(undefined),
+        text: () => Promise.resolve(''),
+      }))
+      const p = board.deleteCard('c1', 'card1')
+      expect(board.columns.value[0].cards).toHaveLength(0)
+      await p
     })
 
-    it('does nothing for an unknown card id', () => {
-      const before = board.columns.value[0].cards.length
-      board.deleteCard(board.columns.value[0].id, 'ghost-card')
-      expect(board.columns.value[0].cards).toHaveLength(before)
+    it('rolls back on API failure', async () => {
+      const card = mockCard('card1', 'c1', 'Task')
+      board.setBoard([mockColumn('c1', 'To Do', [card])])
+      vi.stubGlobal('fetch', makeFetch({}, false))
+      await board.deleteCard('c1', 'card1')
+      expect(board.columns.value[0].cards).toHaveLength(1)
     })
   })
 
-  describe('moveCard', () => {
-    it('moves a card from one column to another', () => {
-      const fromCol = board.columns.value[0]
-      const toCol = board.columns.value[1]
-      // Ensure source has a card
-      board.addCard(fromCol.id, 'Move me', '')
-      const card = board.columns.value[0].cards.at(-1)!
-
-      board.moveCard(card.id, fromCol.id, toCol.id, 0)
-
-      expect(board.columns.value[0].cards.find(c => c.id === card.id)).toBeUndefined()
-      expect(board.columns.value[1].cards.find(c => c.id === card.id)).toBeDefined()
-    })
-
-    it('inserts the card at the correct index', () => {
-      const fromCol = board.columns.value[0]
-      const toCol = board.columns.value[2]
-      board.addCard(fromCol.id, 'Indexed', '')
-      const card = board.columns.value[0].cards.at(-1)!
-
-      board.moveCard(card.id, fromCol.id, toCol.id, 0)
-
-      expect(board.columns.value[2].cards[0].id).toBe(card.id)
+  describe('syncCardMove', () => {
+    it('calls PUT /api/card/:id/move with correct payload', async () => {
+      board.setBoard([mockColumn('c1', 'To Do'), mockColumn('c2', 'Done')])
+      const fetchMock = makeFetch(mockCard('card1', 'c2'))
+      vi.stubGlobal('fetch', fetchMock)
+      await board.syncCardMove('card1', 'c2', 0)
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/card/card1/move',
+        expect.objectContaining({ method: 'PUT' })
+      )
     })
   })
 })

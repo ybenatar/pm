@@ -20,7 +20,7 @@ RUN uv sync --frozen --no-dev || uv sync --no-dev
 
 # Copy actual project files strictly
 COPY backend/ .
-RUN uv sync --no-dev
+RUN uv sync --frozen --no-dev
 
 # Copy frontend static build (for future serving)
 COPY --from=frontend-build /app/frontend/.output/public /app/frontend/.output/public

@@ -1,7 +1,8 @@
 export default defineNuxtRouteMiddleware((to) => {
   const auth = useCookie('kanban_auth')
-  
-  // They are trying to visit a protected page while NOT logged in
+
+  // UI-only gate: the cookie value is not cryptographically validated.
+  // Backend endpoints do not enforce auth. Local MVP only.
   if (!auth.value && to.path !== '/login') {
     return navigateTo('/login')
   }

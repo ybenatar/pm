@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 const auth = useCookie('kanban_auth')
+const { columns, isBoardLoading } = useBoard()
 
 useHead({
   title: 'Kanban Board',
@@ -8,7 +9,7 @@ useHead({
     { name: 'description', content: 'A slick, professional Kanban project management board.' },
   ],
   link: [
-    { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+    { rel: 'icon', href: 'data:,' },
   ],
 })
 
@@ -16,6 +17,8 @@ const isSidebarOpen = ref(true)
 
 function logout() {
   auth.value = null
+  columns.value = []
+  isBoardLoading.value = true
   navigateTo('/login')
 }
 </script>
