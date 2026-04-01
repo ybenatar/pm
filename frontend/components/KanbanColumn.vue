@@ -134,7 +134,10 @@ function onDragDrop(event: any) {
       :id="`add-card-btn-${column.id}`"
       @click="showForm = true"
     >
-      + Add card
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
+      Add card
     </button>
   </div>
 </template>
@@ -147,10 +150,9 @@ function onDragDrop(event: any) {
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
-  min-width: 240px;
-  max-width: 300px;
-  flex: 1;
-  max-height: calc(100vh - 120px);
+  flex: 1 1 280px;
+  min-width: 260px;
+  max-width: 460px;
 }
 
 .column-header {
@@ -194,13 +196,12 @@ function onDragDrop(event: any) {
 }
 
 .card-list {
-  flex: 1;
-  overflow-y: auto;
   padding: 0 12px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-height: 4px;
+  padding-bottom: 8px;
 }
 
 /* Drag-and-drop visual cues */
@@ -259,6 +260,9 @@ function onDragDrop(event: any) {
   width: 100%;
   border-radius: 0 0 var(--radius) var(--radius);
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   transition: color var(--transition), background var(--transition);
 }
 .btn-add-card:hover {

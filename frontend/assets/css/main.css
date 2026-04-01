@@ -8,6 +8,10 @@
   --navy:    #032147;
   --gray:    #888888;
 
+  --purple-secondary: #753991;
+  --gray-text:   rgba(255, 255, 255, 0.6);
+  --gray-border: rgba(255, 255, 255, 0.15);
+
   --bg:        #0d1b2e;
   --surface:   #112240;
   --surface-2: #1a3157;

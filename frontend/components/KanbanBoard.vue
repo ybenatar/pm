@@ -38,10 +38,12 @@ function onCardsChanged(columnId: string, newCards: Column['cards']) {
 <style scoped>
 .board {
   display: flex;
-  gap: 16px;
-  padding: 0 24px 24px;
-  overflow-x: auto;
-  flex: 1;
+  flex-wrap: wrap;
+  gap: 20px;
+  padding: 0 28px 28px;
+  overflow-y: auto;
+  height: calc(100vh - 80px); /* 60px header + 20px top padding */
   align-items: flex-start;
+  align-content: flex-start;
 }
 </style>

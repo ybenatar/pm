@@ -152,11 +152,11 @@ async function sendMessage() {
 .ai-sidebar {
   width: 320px;
   height: 100%;
-  background: #fff;
-  border-left: 1px solid #e0e0e0;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  box-shadow: -4px 0 15px rgba(0, 0, 0, 0.05);
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.3);
 }
 
 .sidebar-header {
@@ -228,8 +228,8 @@ async function sendMessage() {
 
 .message-bubble.assistant {
   align-self: flex-start;
-  background: #f0f4f8;
-  color: var(--navy);
+  background: var(--surface-2);
+  color: var(--text);
   border-bottom-left-radius: 2px;
 }
 
@@ -249,7 +249,7 @@ async function sendMessage() {
 .typing-dots span {
   width: 6px;
   height: 6px;
-  background: var(--navy);
+  background: var(--text-muted);
   border-radius: 50%;
   opacity: 0.4;
   animation: bounce 1.4s infinite ease-in-out both;
@@ -265,7 +265,7 @@ async function sendMessage() {
 
 .input-container {
   padding: 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border);
   display: flex;
   gap: 8px;
   align-items: flex-end;
@@ -273,28 +273,28 @@ async function sendMessage() {
 
 textarea {
   flex: 1;
-  background: #f9f9f9;
-  border: 1px solid #ddd;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 14px;
   resize: none;
   font-family: inherit;
   max-height: 100px;
-  color: #032147 !important; /* Hardcoded Dark Navy for high contrast */
-  caret-color: #032147 !important;
+  color: var(--text);
+  caret-color: var(--text);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 textarea::placeholder {
-  color: #888888; /* Gray for placeholder */
+  color: var(--gray);
 }
 
 textarea:focus {
   outline: none;
-  border-color: var(--blue-primary);
-  background: #fff;
-  box-shadow: 0 0 0 3px rgba(32, 157, 215, 0.2); /* Clear visual focus ring */
+  border-color: var(--blue);
+  background: var(--surface-2);
+  box-shadow: 0 0 0 3px rgba(32, 157, 215, 0.15);
 }
 
 .send-btn {
